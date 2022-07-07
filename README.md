@@ -4,7 +4,7 @@
 项目结构:  
 {  
   main.cpp //主程序  
-  mymath.hpp //线代运算库  
+  mymath.hpp //手作垃圾线代运算库，突出一个能用就行。  
   mymath.cpp  
 }  
 
