@@ -41,6 +41,16 @@ mm::vec4 operator*(const float& num, const mm::vec4& v1)
     return temp;
 }
 
+mm::vec4 operator*(const mm::vec4& v1, const float& num)
+{
+    mm::vec4 temp = mm::vec4();
+    for (int i = 0; i < 4; ++i)
+    {
+        temp.v[i] = num * v1.v[i];
+    }
+    return temp;
+}
+
 mm::vec4 operator+(const mm::vec4& v1, const mm::vec4& v2)
 {
     mm::vec4 temp;

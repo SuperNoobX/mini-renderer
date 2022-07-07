@@ -55,6 +55,7 @@ namespace mm
 mm::mat4 operator*(const mm::mat4 left_mat, const mm::mat4 right_mat);
 mm::vec4 operator*(const mm::mat4& mat, const mm::vec4& v1);
 mm::vec4 operator*(const float& num, const mm::vec4& v1);
+mm::vec4 operator*(const mm::vec4& v1, const float& num);
 mm::vec4 operator+(const mm::vec4& v1, const mm::vec4& v2);
 mm::vec3 operator-(const mm::vec3& v1, const mm::vec3& v2);
 
