@@ -17,6 +17,8 @@ class Triangle
 {
 public:
     std::vector<vec4> points;
+    std::vector<vec4> colors;
+
     Triangle()
     {
         points.push_back(vec4(0,0,0,1));
@@ -32,6 +34,7 @@ public:
     Triangle(const Triangle& t)
     {
         points = t.points;
+        colors = t.colors;
     }
 };
 
@@ -267,6 +270,9 @@ int main()
 {
 //三个顶点组成一个图元
 Triangle triangle({0,0,0,1},{1,1,0,1},{0,1,0,1});
+triangle.colors.push_back(vec4(1.0f, 0.0f, 0.0f, 1.0f));
+triangle.colors.push_back(vec4(0.0f, 1.0f, 0.0f, 1.0f));
+triangle.colors.push_back(vec4(0.0f, 0.0f, 1.0f, 1.0f));
 
 //准备相机属性
 vec3 eye_pos = vec3(0,0,10);
@@ -370,8 +376,11 @@ for(int frag_row=int(boundingbox.v[0]); frag_row<=int(boundingbox.v[1]); ++frag_
                 //插值view space顶点坐标
                 vec4 shading_coord = alpha * view_tri_pos[0] * (1/new_triangle.points[0].v[3]) + beta * view_tri_pos[1] * (1/new_triangle.points[1].v[3]) + gamma * view_tri_pos[2] * (1/new_triangle.points[2].v[3]);
                 shading_coord = shading_coord * z;
+                //插值顶点的颜色属性
+                vec4 frag_color = alpha * new_triangle.colors[0] * (1/new_triangle.points[0].v[3]) + beta * new_triangle.colors[1] * (1/new_triangle.points[1].v[3]) + gamma * new_triangle.colors[2] * (1/new_triangle.points[2].v[3]);
+                frag_color = frag_color * z;
                 //获取fragment_shader计算的颜色，
-                vec4 frag_color = fragment_shader(new_triangle);
+                //vec4 frag_color = fragment_shader(new_triangle);
                 //写入颜色缓冲
                 col_buf[get_index(frag_col, frag_row)] = frag_color;
                 //更新深度缓冲
