@@ -214,8 +214,8 @@ mm::mat4 mm::mat4::get_perspective_matrix(float fov, float ratio, float near, fl
     m[0][2]=(r+l)/r-l;
     m[1][1]=2*n/t-b;
     m[1][2]=(t+b)/(t-b);
-    m[2][2]=(n+f)/(n-f);
-    m[2][3]=2*(f*n)/(n-f);
+    m[2][2]=-(n+f)/(n-f);
+    m[2][3]=-2*(f*n)/(n-f);
     m[3][2]=-1;
     m[3][3]=0;
 
@@ -248,7 +248,11 @@ mm::mat4 mm::mat4::get_view_matrix(mm::vec3 &e, mm::vec3 &g)
     base.m[2][1] = w.v[1];
     base.m[2][2] = w.v[2];
 
-    *this = base * move;
+    mat4 negateZ;
+    negateZ.set_uni();
+    negateZ.m[2][2] = -1;
+
+    *this = negateZ * base * move;
 
     return *this;
 }

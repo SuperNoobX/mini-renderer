@@ -242,7 +242,7 @@ void generate_img(const std::vector<vec4> &color_buf)
     f.write(reinterpret_cast<char*>(fileHeader), fileHeaderSize);
     f.write(reinterpret_cast<char*>(informationHeader), informationHearSize);
 
-    for(int y=0; y<m_height; ++y)
+    for(int y=m_height-1; y>=0; y--)//这里看着这么奇怪是因为当时往颜色缓冲里写数据的时候是一排一排写的。而图像最顶端的一排在数组的最后一排。
     {
         for(int x=0; x<m_width; ++x)
         {
@@ -269,125 +269,138 @@ void generate_img(const std::vector<vec4> &color_buf)
 int main()
 {
 //三个顶点组成一个图元
-Triangle triangle({0,0,0,1},{1,1,0,1},{0,1,0,1});
-triangle.colors.push_back(vec4(1.0f, 0.0f, 0.0f, 1.0f));
-triangle.colors.push_back(vec4(0.0f, 1.0f, 0.0f, 1.0f));
-triangle.colors.push_back(vec4(0.0f, 0.0f, 1.0f, 1.0f));
+Triangle triangle0({0,0,0,1},{1,1,0,1},{0,1,0,1});
+triangle0.colors.push_back(vec4(1.0f, 0.0f, 0.0f, 1.0f));
+triangle0.colors.push_back(vec4(0.0f, 1.0f, 0.0f, 1.0f));
+triangle0.colors.push_back(vec4(0.0f, 0.0f, 1.0f, 1.0f));
+
+Triangle triangle1({1,0,-2,1},{1,1,-2,1},{0,1,-2,1});
+triangle1.colors.push_back(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+triangle1.colors.push_back(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+triangle1.colors.push_back(vec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+//把三角形填入数组
+std::vector<Triangle> triangles;
+triangles.push_back(triangle0);
+triangles.push_back(triangle1);
 
 //准备相机属性
 vec3 eye_pos = vec3(0,0,10);
 vec3 gaze_vec = vec3(0,0,-1);
 
-//准备好mvp矩阵，带着三个顶点走一遍顶点着色器
-mat4 model, view, projection;
-model.set_uni();
-view.get_view_matrix(eye_pos, gaze_vec);
-projection.get_perspective_matrix(70.0f, 4/3, 0.1f, 1000.0f);
-
-//view space下的三角形坐标
-std::vector<vec4> view_tri_pos;
-view_tri_pos = triangle.points;
-
-//顶点着色器遍历三角形每一个顶点
-for(int i=0;i<3;++i)
-{
-    //triangle内数据更新为经过mvp变换后但是还没有进行齐次除法的顶点坐标
-    triangle.points[i] = vertex_shader(triangle.points[i], model, view, projection);
-    //获得view space下的三角形坐标，用于在光栅化阶段插值得到shading_point
-    mat4 mv = view * model;
-    view_tri_pos[i] = mv * view_tri_pos[i];
-}
-
-//后续大致思路：得到变换后的顶点,这里要做齐次裁剪然后丢掉不要的三角形。没被裁剪的三角形传入光栅化器,插值得到片元坐标以及其他属性，深度测试，丢弃不需要的片元。
-//齐次裁剪
-if(out_of_view_volume(triangle))
-{
-    //丢掉图元或者裁剪也行,然后直接开始处理下一个三角形
-}
-//开始光栅化流程
 //准备颜色缓冲和深度缓冲
 std::vector<vec4> col_buf(SCR_WIDTH*SCR_HEIGHT, vec4(0.1f, 0.1f, 0.1f, 0.1f));
 std::vector<float> dep_buf(SCR_WIDTH*SCR_HEIGHT, 1);
 //col_buf.resize(SCR_WIDTH*SCR_HEIGHT);
 //dep_buf.resize(SCR_WIDTH*SCR_HEIGHT);
 
-//齐次除法
-for(int i=0;i<3;++i)
+for(std::vector<Triangle>::iterator it = triangles.begin();it!=triangles.end();it++)
 {
-    float w = triangle.points[i].v[3];
-    triangle.points[i].v[0] /= w;
-    triangle.points[i].v[1] /= w;
-    triangle.points[i].v[2] /= w;
-    //w分量留着后面做插值矫正
-}
+    Triangle triangle = *it;
+    //准备好mvp矩阵，带着三个顶点走一遍顶点着色器
+    mat4 model, view, projection;
+    model.set_uni();
+    view.get_view_matrix(eye_pos, gaze_vec);
+    projection.get_perspective_matrix(70.0f, 4/3, 0.1f, 1000.0f);
 
-//准备viewport矩阵
-mat4 vp;
-vp.get_viewport_matrix(SCR_WIDTH,SCR_HEIGHT);
-//旧三角形的w分量用于做插值矫正
-Triangle new_triangle = Triangle(triangle);
-for(int i=0;i<3;++i)
-{
-    //新三角形在NDC空间下的坐标为(x,y,z,1),把w分量设置为1是为了视口变换矩阵能够正确地应用
-    new_triangle.points[i].v[3] /= triangle.points[i].v[3];
-}
-//三角形由NDC转到屏幕空间
-new_triangle.points[0] = vp * new_triangle.points[0];
-new_triangle.points[1] = vp * new_triangle.points[1];
-new_triangle.points[2] = vp * new_triangle.points[2];
-for(int i=0;i<3;++i)
-{
-    //把旧三角形的w分量(-w是顶点在view space下的深度值)传给新三角形，打包在一起，方便光栅化器做插值矫正
-    new_triangle.points[i].v[3] = triangle.points[i].v[3];
-}
+    //view space下的三角形坐标
+    std::vector<vec4> view_tri_pos;
+    view_tri_pos = triangle.points;
 
-//生成fragments
-vec4 boundingbox = find_boundingbox(new_triangle);
-//列是x，行是y
-for(int frag_row=int(boundingbox.v[0]); frag_row<=int(boundingbox.v[1]); ++frag_row)
-{
-    for(int frag_col=int(boundingbox.v[2]); frag_col<=int(boundingbox.v[3]); ++frag_col)
+    //顶点着色器遍历三角形每一个顶点
+    for(int i=0;i<3;++i)
     {
-        if(insideTriangle(float(frag_col+0.5), float(frag_row+0.5), new_triangle.points))
+        //triangle内数据更新为经过mvp变换后但是还没有进行齐次除法的顶点坐标
+        triangle.points[i] = vertex_shader(triangle.points[i], model, view, projection);
+        //获得view space下的三角形坐标，用于在光栅化阶段插值得到shading_point
+        mat4 mv = view * model;
+        view_tri_pos[i] = mv * view_tri_pos[i];
+    }
+
+    //后续大致思路：得到变换后的顶点,这里要做齐次裁剪然后丢掉不要的三角形。没被裁剪的三角形传入光栅化器,插值得到片元坐标以及其他属性，深度测试，丢弃不需要的片元。
+    //齐次裁剪
+    if(out_of_view_volume(triangle))
+    {
+        //丢掉图元或者裁剪也行,然后直接开始处理下一个三角形
+    }
+
+    //开始光栅化流程
+    //齐次除法
+    for(int i=0;i<3;++i)
+    {
+        float w = triangle.points[i].v[3];
+        triangle.points[i].v[0] /= w;
+        triangle.points[i].v[1] /= w;
+        triangle.points[i].v[2] /= w;
+        //w分量留着后面做插值矫正
+    }
+
+    //准备viewport矩阵
+    mat4 vp;
+    vp.get_viewport_matrix(SCR_WIDTH,SCR_HEIGHT);
+    //旧三角形的w分量用于做插值矫正
+    Triangle new_triangle = Triangle(triangle);
+    for(int i=0;i<3;++i)
+    {
+        //新三角形在NDC空间下的坐标为(x,y,z,1),把w分量设置为1是为了视口变换矩阵能够正确地应用
+        new_triangle.points[i].v[3] /= triangle.points[i].v[3];
+    }
+    //三角形由NDC转到屏幕空间
+    new_triangle.points[0] = vp * new_triangle.points[0];
+    new_triangle.points[1] = vp * new_triangle.points[1];
+    new_triangle.points[2] = vp * new_triangle.points[2];
+    for(int i=0;i<3;++i)
+    {
+        //把旧三角形的w分量(-w是顶点在view space下的深度值)传给新三角形，打包在一起，方便光栅化器做插值矫正
+        new_triangle.points[i].v[3] = triangle.points[i].v[3];
+    }
+
+    //生成fragments
+    vec4 boundingbox = find_boundingbox(new_triangle);
+    //列是x，行是y
+    for(int frag_row=int(boundingbox.v[0]); frag_row<=int(boundingbox.v[1]); ++frag_row)
+    {
+        for(int frag_col=int(boundingbox.v[2]); frag_col<=int(boundingbox.v[3]); ++frag_col)
         {
-            //计算重心坐标
-            vec3 bary_cor = compute_barycentric2D(frag_col+0.5, frag_row+0.5, new_triangle.points);
-            float alpha = bary_cor.v[0];
-            float beta = bary_cor.v[1];
-            float gamma = bary_cor.v[2];
-
-            //new_triangle.points[i].v[3] is the vertex view space depth value z.
-            //Z is interpolated view space depth for the current pixel
-            //zp is depth between zNear and zFar, used for z-buffer
-            //透视插值矫正,可以让我们对任何属性以view space中的比例进行插值
-
-            //像素对应在view space 的深度值
-            float z = 1.0f / (alpha / new_triangle.points[0].v[3] + beta / new_triangle.points[1].v[3] + gamma / new_triangle.points[2].v[3]);
-            //使用screen space的重心坐标对NDC中三角形的深度进行插值
-            float zp = alpha * new_triangle.points[0].v[2] / new_triangle.points[0].v[3] + beta * new_triangle.points[1].v[2] / new_triangle.points[1].v[3] + gamma * new_triangle.points[2].v[2] / new_triangle.points[2].v[3];
-            //插值矫正
-            zp *= -z;//这里取个反，用于比较的深度值就变成正的了，由此，我们认为0为最近处，1为无限远
-
-
-            int ind=get_index(frag_col, frag_row);
-            //深度测试
-            if(dep_buf[ind] > zp)
+            if(insideTriangle(float(frag_col+0.5), float(frag_row+0.5), new_triangle.points))
             {
-                //插值view space顶点坐标
-                vec4 shading_coord = alpha * view_tri_pos[0] * (1/new_triangle.points[0].v[3]) + beta * view_tri_pos[1] * (1/new_triangle.points[1].v[3]) + gamma * view_tri_pos[2] * (1/new_triangle.points[2].v[3]);
-                shading_coord = shading_coord * z;
-                //插值顶点的颜色属性
-                vec4 frag_color = alpha * new_triangle.colors[0] * (1/new_triangle.points[0].v[3]) + beta * new_triangle.colors[1] * (1/new_triangle.points[1].v[3]) + gamma * new_triangle.colors[2] * (1/new_triangle.points[2].v[3]);
-                frag_color = frag_color * z;
-                //获取fragment_shader计算的颜色，
-                //vec4 frag_color = fragment_shader(new_triangle);
-                //写入颜色缓冲
-                col_buf[get_index(frag_col, frag_row)] = frag_color;
-                //更新深度缓冲
-                dep_buf[ind] = zp;
-            }
+                //计算重心坐标
+                vec3 bary_cor = compute_barycentric2D(frag_col+0.5, frag_row+0.5, new_triangle.points);
+                float alpha = bary_cor.v[0];
+                float beta = bary_cor.v[1];
+                float gamma = bary_cor.v[2];
 
-            
+                //new_triangle.points[i].v[3] is the vertex view space depth value z.
+                //Z is interpolated view space depth for the current pixel
+                //zp is depth between zNear and zFar, used for z-buffer
+                //透视插值矫正,可以让我们对任何属性以view space中的比例进行插值
+
+                //像素对应在view space 的深度值
+                float z = 1.0f / (alpha / new_triangle.points[0].v[3] + beta / new_triangle.points[1].v[3] + gamma / new_triangle.points[2].v[3]);
+                //使用screen space的重心坐标对NDC中三角形的深度进行插值
+                float zp = alpha * new_triangle.points[0].v[2] / new_triangle.points[0].v[3] + beta * new_triangle.points[1].v[2] / new_triangle.points[1].v[3] + gamma * new_triangle.points[2].v[2] / new_triangle.points[2].v[3];
+                //插值矫正
+                zp *= z;//用于比较的深度值，我们认为0为最近处，1为无限远
+
+
+                int ind=get_index(frag_col, frag_row);
+                //深度测试
+                if(dep_buf[ind] > zp)
+                {
+                    //插值view space顶点坐标
+                    vec4 shading_coord = alpha * view_tri_pos[0] * (1/new_triangle.points[0].v[3]) + beta * view_tri_pos[1] * (1/new_triangle.points[1].v[3]) + gamma * view_tri_pos[2] * (1/new_triangle.points[2].v[3]);
+                    shading_coord = shading_coord * z;
+                    //插值顶点的颜色属性
+                    vec4 frag_color = alpha * new_triangle.colors[0] * (1/new_triangle.points[0].v[3]) + beta * new_triangle.colors[1] * (1/new_triangle.points[1].v[3]) + gamma * new_triangle.colors[2] * (1/new_triangle.points[2].v[3]);
+                    frag_color = frag_color * z;
+                    //获取fragment_shader计算的颜色，
+                    //vec4 frag_color = fragment_shader(new_triangle);
+                    //写入颜色缓冲
+                    col_buf[get_index(frag_col, frag_row)] = frag_color;
+                    //更新深度缓冲
+                    dep_buf[ind] = zp;
+                }
+            }
         }
     }
 }
